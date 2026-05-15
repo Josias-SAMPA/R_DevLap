@@ -1,0 +1,200 @@
+LapDeq — Interface de Tests Statistiques
+Application Shiny R interactive couvrant 18 tests statistiques organisés en 6
+familles, avec affichage structuré en 6 sections pédagogiques, sessions multiutilisateurs indépendantes et export des résultats.
+Sommaire
+Présentation
+Fonctionnalités
+Tests disponibles
+Prérequis
+Installation
+Lancement
+Accès depuis un téléphone
+Structure du projet
+Déploiement multi-utilisateurs
+Auteur
+Références
+Présentation
+LapDeq est une application web locale développée en R Shiny pour les étudiants du
+Département Mathématiques & Informatique de l’Université de Dschang. Elle permet de
+réaliser des tests statistiques classiques directement depuis un navigateur, sans
+connaissances en programmation.
+Chaque test affiche ses résultats en 6 sections pédagogiques :
+1. Données saisies → récapitulatif des valeurs entrées2. Formulation H₀ / H₁ → hypothèse nulle et alternative
+3. Loi & conditions → loi de probabilité et validité des hypothèses
+4. Valeur observée → statistique de test calculée (Z_obs, t_obs, F_obs…)
+5. Zone de non-rejet → ZNR, points critiques, position de la statistique
+6. Décision et conclusion → rejet / non-rejet + interprétation en langage clair
+Fonctionnalités
+Fonctionnalité Détail
+18 tests
+statistiques
+6 familles : moyennes, proportions, variances, indépendance,
+régression, appariés
+Groupes
+dynamiques
+k groupes configurables (ANOVA, Kruskal-Wallis, k variances, k
+proportions, Chi-deux)
+Données pré-
+remplies
+Chaque test arrive avec un exemple fonctionnel
+6 sections
+structurées Affichage pédagogique H₀/H₁, ZNR, décision, interprétation
+Conditions de
+validité Vérification automatique (✓ / ⚠) pour chaque test
+Export résultats Téléchargement du résultat en .txt
+Multi-utilisateurs Sessions Shiny isolées — chaque appareil est indépendant
+Interface
+responsive
+Optimisée pour smartphones et tablettes
+Section À propos Références, auteur, instructions de déploiement
+Tests disponibles
+µ — Comparaison de Moyennes
+# Test Description
+t-test Student (petits1 échantillons) 2 moyennes indép., variances supposées égales,
+modèle pooled
+2 Z-test (grands échantillons) 2 moyennes indép., n ≥ 30, loi normale
+3 ANOVA à 1 facteur k ≥ 3 groupes, paramétrique, avec Tukey HSD en
+option
+4 Kruskal-Wallis k ≥ 3 groupes, non paramétrique
+5 Mann-Whitney 2 groupes indépendants, non paramétrique
+6
+Moyenne observée vs
+théorique 1 échantillon vs µ₀, Student ou Normale selon n
+% — Comparaison de Proportions
+# Test Description
+7 Z-test 2 proportions Test Z pour 2 proportions indépendantes
+8 Proportion vs p₀ Test Z pour 1 proportion vs valeur théorique
+9 k proportions — Chi-deux Chi-deux d’ajustement, k ≥ 2 groupes
+σ² — Comparaison de Variances
+# Test Description
+10 Fisher 2 variances F-test de Fisher, uni/bilatéral
+11 k variances
+Levene + Brown-Forsythe + Bartlett
+simultanément
+12
+ANOVA 2 facteurs sans
+réplication Modèle en blocs randomisés
+⊥ — Indépendance & Corrélation
+# Test Description
+13 Chi-deux d’indépendance Tableau de contingence r×c, V de Cramér14 Corrélation de Pearson Calcul manuel (formule population), test sur rp
+15 Corrélation de Spearman Rangs, non paramétrique
+16 Corrélation de Kendall Concordance, non paramétrique
+↗ — Régression
+# Test Description
+17
+Régression linéaire
+simple
+Moindres carrés — r, a, b, R², test de significativité de
+b
+⇄ — Données Appariées
+# Test Description
+18 Test de Wilcoxon Rangs signés, paires avant/après, table ou approx. normale
+Prérequis
+Logiciels nécessaires
+Logiciel Version
+minimale Lien
+R ≥ 4.1.0 https://cran.r-project.org
+RStudio
+(recommandé) ≥ 2022.07
+https://posit.co/download/rstudiodesktop
+RStudio n’est pas obligatoire : R seul suffit pour lancer l’application depuis un
+terminal.
+Packages R nécessaires
+Package Rôle
+shiny Framework de l’application webshinyjs Affichage/masquage dynamique des éléments
+Les deux packages sont sur le CRAN officiel.
+Installation
+Étape 1 — Installer R
+1. Aller sur https://cran.r-project.org
+2. Cliquer sur votre système : Windows, macOS ou Linux
+3. Télécharger et installer (installation standard, options par défaut)
+Étape 2 — Installer RStudio (recommandé)
+1. Aller sur https://posit.co/download/rstudio-desktop
+2. Télécharger la version gratuite RStudio Desktop
+3. Installer (après R, pas avant)
+Étape 3 — Installer les packages R
+Ouvrir RStudio (ou la console R) et exécuter :
+install.packages("shiny")
+install.packages("shinyjs")
+Attendre la fin du téléchargement. Une seule fois suffit.
+Étape 4 — Récupérer l’application
+Option A — Cloner avec Git :
+git clone https://github.com/<votre-compte>/lapdeq.git
+cd lapdeq
+Option B — Télécharger le ZIP :
+1. Cliquer sur Code → Download ZIP sur la page GitHub
+2. Extraire l’archive dans un dossier de votre choixLancement
+Depuis RStudio
+1. Ouvrir RStudio
+2. Aller dans File → Open File… → sélectionner app.R
+3. Cliquer sur le bouton Run App (en haut à droite de l’éditeur)
+4. L’application s’ouvre dans un onglet RStudio ou dans votre navigateur par défaut
+Depuis la console R
+# Se placer dans le dossier du projet
+setwd("chemin/vers/lapdeq")
+# Lancer l'application
+shiny::runApp()
+Depuis un terminal (sans RStudio)
+Rscript -e "shiny::runApp('chemin/vers/lapdeq')"
+Accès depuis un téléphone
+Pour accéder à l’application depuis un ou plusieurs téléphones simultanément :
+Étape 1 — Lancer le serveur accessible sur le réseau
+Dans la console R ou RStudio, exécuter :
+shiny::runApp(host = "0.0.0.0", port = 3838)
+Ne pas fermer cette console tant que les appareils sont connectés.
+Étape 2 — Trouver l’adresse IP du PC
+Système Commande
+Windows ipconfig dans l’invite de commande → chercher Adresse IPv4macOS ifconfig dans le terminal → chercher l’entrée en0
+Linux/Ubuntu hostname -I dans le terminal
+Exemple d’IP : 192.168.1.42
+Étape 3 — Connecter les téléphones
+1. Connecter chaque téléphone au même réseau Wi-Fi que le PC
+2. Ouvrir le navigateur du téléphone (Chrome, Firefox, Safari…)
+3. Taper dans la barre d’adresse :
+http://192.168.1.42:3838
+(remplacer 192.168.1.42 par l’IP réelle de votre PC)
+4. L’application LapDeq s’ouvre directement dans le navigateur
+Sessions indépendantes
+Chaque téléphone (chaque onglet) reçoit une session Shiny isolée. Les données
+saisies, les résultats obtenus et le prénom de l’utilisateur d’un appareil n’interfèrent
+jamais avec ceux d’un autre appareil. C’est le comportement standard de Shiny Server.
+Structure du projet
+lapdeq/
+│
+├── app.R ← Code source complet de l'application (UI + serveur)
+├── README.md ← Ce fichier
+└── .gitignore ← (optionnel) fichiers à exclure de Git
+L’application est mono-fichier : tout le code (interface, navigation, 18 calculs, CSS) est
+dans app.R .
+PC (serveur) Téléphone A Téléphone B Téléphone C
+192.168.1.42:3838 → session propre A → session propre B → session propre C
+(prénom, données, (prénom, données, (prénom, données,
+résultats isolés) résultats isolés) résultats isolés)Déploiement multi-utilisateurs (avancé)
+Pour un déploiement permanent (sans garder RStudio ouvert) :
+Option 1 — Shiny Server (Linux)
+# Installer Shiny Server sur Ubuntu
+sudo apt-get install r-base
+sudo R -e "install.packages('shiny'); install.packages('shinyjs')"
+# Suivre : https://posit.co/download/shiny-server/
+Option 2 — shinyapps.io (cloud gratuit)
+install.packages("rsconnect")
+rsconnect::setAccountInfo(name="<compte>", token="<token>", secret="<secret>")
+rsconnect::deployApp("chemin/vers/lapdeq")
+Auteur
+DevSolution — Informatique L3, Université de Dschang
+Développé dans le cadre des activités pédagogiques du Département
+Mathématiques & Informatique, Faculté des Sciences, Université de Dschang
+(UDs), Cameroun.
+emmanueljuniordequa2@gmail.com
+690 624 051
+Références
+Source Description
+M.A. Onabid
+Statistiques et Analyse de Données, Département Maths-Info,
+UDs
+Dagnelie, P. (2013) Statistique théorique et appliquée, De Boeck Université
+Wonnacott &Wonnacott Statistique économique et sociale
+R Core Team Documentation officielle du package stats (base R)
+Chang W. et al. Shiny: Web Application Framework for R, https://shiny.posit.co
+Licence
+Usage académique et pédagogique — Université de Dschang · 2026
