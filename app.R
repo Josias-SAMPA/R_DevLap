@@ -187,7 +187,7 @@ ui <- fluidPage(
   "))
 )
 
-# ── SERVEUR
+# SERVEUR
 server <- function(input, output, session) {
   
   rv <- reactiveValues(nom="", cat_id=NULL, test_id=NULL, last_run=NULL, result_text="")
@@ -245,7 +245,7 @@ server <- function(input, output, session) {
     ))
   })
   
-  # ── UI Catégories ───
+  # UI Catégories
   output$categorie_ui <- renderUI({
     tagList(
       div(class="greeting-banner", "Bonjour ", tags$strong(rv$nom), " ! Selectionnez une categorie de tests."),
@@ -499,7 +499,7 @@ server <- function(input, output, session) {
     )
   })
   
-  # ── Résultat
+  #  Resultat
   output$result_ui <- renderUI({
     req(rv$last_run, rv$last_run == rv$test_id, input$run_test)
     res <- isolate(compute_test())
@@ -526,7 +526,7 @@ server <- function(input, output, session) {
     v[!is.na(v)]
   }
   
-  # Séparateur de section numérotee
+  # Separateur de section numerotee
   S <- function(n, titre)
     sprintf('\n<span class="r-sec">─── %d. %s ───────────────────────────────</span>', n, titre)
   
@@ -535,13 +535,13 @@ server <- function(input, output, session) {
     if (ok) sprintf('  <span class="r-cond-ok">✓</span>  %s', txt)
   else    sprintf('  <span class="r-cond-warn">⚠</span>  %s', txt)
   
-  # Hypothèses
+  # Hypotheses
   HYP <- function(h0, h1) sprintf('<span class="r-h0">  H₀ : %s\n  H₁ : %s</span>', h0, h1)
   
   # Valeur en or
   V <- function(x, fmt="%.4f") sprintf(paste0('<span class="r-value">',fmt,'</span>'), x)
   
-  # Statistique observée (plus grande)
+  # Statistique observee
   STAT <- function(nom, val)
     sprintf('<span class="r-stat">  %s = %.4f</span>', nom, val)
   
@@ -550,19 +550,12 @@ server <- function(input, output, session) {
     paste0("  ZNR = ", V(znr_str,"%s"), "   (α = ", alpha, ")\n",
            STAT(stat_name, stat_val))
   
-  # Décision p-value
-  DEC_P <- function(alpha, pval)
-    if (pval < alpha)
-      sprintf('<span class="r-ok">  ✔  REJET de H₀  (p-value = %.6f  <  α = %.2f)</span>', pval, alpha)
-  else
-    sprintf('<span class="r-warn">  ✘  NON-REJET de H₀  (p-value = %.6f  ≥  α = %.2f)</span>', pval, alpha)
-  
-  # Décision ZNR
+  # ── DECISION par comparaison stat_obs vs valeur critique
   DEC_Z <- function(appart)
     if (appart) '<span class="r-warn">  ✘  NON-REJET de H₀  (stat. ∈ ZNR)</span>'
   else        '<span class="r-ok">  ✔  REJET de H₀  (stat. ∉ ZNR)</span>'
   
-  # Interprétation (vert)
+  # Interpretation (vert)
   INTERP <- function(txt) sprintf('<span class="r-interp">  ↳  %s</span>', txt)
   
   # Pied
@@ -690,10 +683,11 @@ server <- function(input, output, session) {
                N <- sum(sapply(grps,length))
                y <- unlist(grps); gf <- factor(rep(seq_len(k),sapply(grps,length)))
                res_aov <- aov(y~gf); sm <- summary(res_aov)[[1]]
-               Fst<-sm$`F value`[1]; pval<-sm$`Pr(>F)`[1]
+               Fst<-sm$`F value`[1]
                d1<-sm$Df[1]; d2<-sm$Df[2]
                SSC<-sm$`Sum Sq`[1]; SSE<-sm$`Sum Sq`[2]; SST<-SSC+SSE
                MSC<-sm$`Mean Sq`[1]; MSE<-sm$`Mean Sq`[2]; Fc<-qf(1-alpha,d1,d2)
+               ap <- (Fst <= Fc)
                ni <- sapply(grps,length); moy <- sapply(grps,mean)
                gl <- paste(sapply(seq_len(k), function(i)
                  sprintf("  G%d: n=%d  moy=%s  s=%s",i,ni[i],V(moy[i]),V(sd(grps[[i]])))), collapse="\n")
@@ -715,15 +709,16 @@ server <- function(input, output, session) {
                  STAT("F_obs = MSC / MSE", Fst),
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
                  sprintf("  ZNR = [ 0 ; %s ]   (F(%d,%d), alpha=%.2f)", V(Fc),d1,d2,alpha),
+                 sprintf("  F_crit = %s", V(Fc)),
                  STAT("F_obs", Fst),
-                 S(6,"DECISION ET CONCLUSION"), DEC_P(alpha,pval),
-                 INTERP(if(pval<alpha)"Au moins une paire de moyennes est significativement differente. Effectuez un test post-hoc." else "Les moyennes des groupes ne sont pas significativement differentes."),
+                 S(6,"DECISION ET CONCLUSION"), DEC_Z(ap),
+                 INTERP(if(!ap)"Au moins une paire de moyennes est significativement differente. Effectuez un test post-hoc." else "Les moyennes des groupes ne sont pas significativement differentes."),
                  "", FOOT(nom), sep="\n"
                )
-               if(pval<alpha && input$an_posthoc=="tukey"){
+               if(!ap && input$an_posthoc=="tukey"){
                  th <- TukeyHSD(res_aov)$gf
                  tl <- paste(sapply(seq_len(nrow(th)), function(i)
-                   sprintf("  %s : diff=%s  p=%s  %s", rownames(th)[i],V(th[i,1]),V(th[i,4]),
+                   sprintf("  %s : diff=%s  %s", rownames(th)[i],V(th[i,1]),
                            if(th[i,4]<alpha)"<span class='r-ok'>sig.</span>" else "<span class='r-warn'>non sig.</span>")),
                    collapse="\n")
                  base <- paste(base, "\n  Post-hoc Tukey HSD :\n", tl, sep="")
@@ -731,7 +726,7 @@ server <- function(input, output, session) {
                base
              },
              
-             #  4 ─ Kruskal-Wallis
+             # 4 ─ Kruskal-Wallis
              kruskal = {
                k     <- max(3L,min(8L,as.integer(input$kw_k%||%3)))
                alpha <- input$kw_alpha
@@ -744,6 +739,7 @@ server <- function(input, output, session) {
                rg <- rank(y); ri <- tapply(rg,gi,sum)
                H  <- (12/(N*(N+1)))*sum(ri^2/ni)-3*(N+1)
                ddl <- k-1; Xc <- qchisq(1-alpha,df=ddl)
+               ap <- (H <= Xc)
                gl <- paste(sapply(seq_len(k), function(i)
                  sprintf("  G%d: n=%d  moy=%s  R=%s",i,ni[i],V(mean(grps[[i]])),V(as.numeric(ri[i])))), collapse="\n")
                paste(
@@ -762,9 +758,10 @@ server <- function(input, output, session) {
                  STAT("H_obs", H),
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
                  sprintf("  ZNR = [ 0 ; %s ]   (chi2(%d), alpha=%.2f)", V(Xc),ddl,alpha),
+                 sprintf("  chi2_crit = %s", V(Xc)),
                  STAT("H_obs", H),
-                 S(6,"DECISION ET CONCLUSION"), DEC_Z(H<=Xc),
-                 INTERP(if(H>Xc)"Les distributions ne sont pas toutes identiques. Effectuez des comparaisons par paires." else "Pas de difference significative entre les distributions."),
+                 S(6,"DECISION ET CONCLUSION"), DEC_Z(ap),
+                 INTERP(if(!ap)"Les distributions ne sont pas toutes identiques. Effectuez des comparaisons par paires." else "Pas de difference significative entre les distributions."),
                  "", FOOT(nom), sep="\n"
                )
              },
@@ -810,8 +807,6 @@ server <- function(input, output, session) {
                } else {
                  mu_u <- n1*n2/2; sg_u <- sqrt(n1*n2*(n1+n2+1)/12)
                  Zobs <- (Uobs-mu_u)/sg_u
-                 pval <- switch(alt, bilateral=2*pnorm(abs(Zobs),lower.tail=FALSE),
-                                gauche=pnorm(Zobs,lower.tail=TRUE), pnorm(Zobs,lower.tail=FALSE))
                  znr  <- znr_norm(alpha,alt); ap <- znr$fn(Zobs)
                  paste(
                    S(1,"DONNEES SAISIES"),
@@ -825,6 +820,7 @@ server <- function(input, output, session) {
                    STAT("Z_obs = (U - mu_U) / sigma_U", Zobs),
                    S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
                    ZNR_LINE(znr$str,"Z_obs",Zobs,alpha),
+                   sprintf("  z_crit = %s", V(znr$crit)),
                    S(6,"DECISION ET CONCLUSION"), DEC_Z(ap),
                    INTERP(if(!ap)"Difference significative entre les distributions." else "Pas de difference significative."),
                    "", FOOT(nom), sep="\n"
@@ -920,6 +916,7 @@ server <- function(input, output, session) {
                  STAT("Z_obs = (p̂ - p0) / SE", Zobs),
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
                  ZNR_LINE(znr$str,"Z_obs",Zobs,alpha),
+                 sprintf("  z_crit = %s",V(znr$crit)),
                  S(6,"DECISION ET CONCLUSION"), DEC_Z(ap),
                  INTERP(if(ap)sprintf("Pas de difference significative avec p0=%.4f.",p0) else sprintf("La proportion observee est significativement differente de p0=%.4f.",p0)),
                  "", FOOT(nom), sep="\n"
@@ -945,6 +942,7 @@ server <- function(input, output, session) {
                theo<-n_tot*tp; cond_ei <- all(theo>=5)
                if(!cond_ei) stop(sprintf("Effectifs theoriques < 5 (min=%.2f). Augmentez n ou regroupez.",min(theo)))
                chi2<-sum((obs-theo)^2/theo); ddl<-k-1; Xc<-qchisq(1-alpha,df=ddl)
+               ap <- (chi2 <= Xc)
                tl <- paste(sapply(seq_len(k), function(i)
                  sprintf("  G%d: Oi=%d  Ei=%s  pi=%s  contrib=%s",
                          i,obs[i],V(theo[i]),V(tp[i]),V((obs[i]-theo[i])^2/theo[i]))), collapse="\n")
@@ -962,9 +960,10 @@ server <- function(input, output, session) {
                  STAT("chi2_obs", chi2),
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
                  sprintf("  ZNR = [ 0 ; %s ]   (chi2(%d), alpha=%.2f)",V(Xc),ddl,alpha),
+                 sprintf("  chi2_crit = %s",V(Xc)),
                  STAT("chi2_obs", chi2),
-                 S(6,"DECISION ET CONCLUSION"), DEC_Z(chi2<=Xc),
-                 INTERP(if(chi2>Xc)"La distribution observee differe significativement de la loi theorique." else "La distribution observee est conforme a la loi theorique."),
+                 S(6,"DECISION ET CONCLUSION"), DEC_Z(ap),
+                 INTERP(if(!ap)"La distribution observee differe significativement de la loi theorique." else "La distribution observee est conforme a la loi theorique."),
                  "", FOOT(nom), sep="\n"
                )
              },
@@ -1012,7 +1011,7 @@ server <- function(input, output, session) {
                )
              },
              
-             # 11 ─ k Variances Levene / Bartlett / Brown-Forsythe 
+             # 11 ─ k Variances Levene / Bartlett / Brown-Forsythe
              var_k = {
                k    <- max(3L,min(8L,as.integer(input$vk_k%||%3)))
                alpha<-input$vk_alpha
@@ -1030,12 +1029,15 @@ server <- function(input, output, session) {
                Zbf<-lapply(seq_along(grps),function(i) abs(grps[[i]]-medi[i]))
                Zmbf<-sapply(Zbf,mean); Z..bf<-sum(ni*Zmbf)/N
                W_bf<-((N-k)/(k-1))*sum(ni*(Zmbf-Z..bf)^2)/sum(sapply(seq_along(grps),function(i) sum((Zbf[[i]]-Zmbf[i])^2)))
-               rb<-bartlett.test(y~gf); K2<-as.numeric(rb$statistic); pb<-rb$p.value
+               rb<-bartlett.test(y~gf); K2<-as.numeric(rb$statistic)
                Fc<-qf(1-alpha,k-1,N-k); Xcb<-qchisq(1-alpha,df=k-1)
-               rl<-if(W_lev>=Fc)"<span class='r-ok'>REJET H0</span>" else "<span class='r-warn'>NON-REJET H0</span>"
-               rb_<-if(W_bf>=Fc)"<span class='r-ok'>REJET H0</span>" else "<span class='r-warn'>NON-REJET H0</span>"
-               rB<-if(pb<alpha)"<span class='r-ok'>REJET H0</span>" else "<span class='r-warn'>NON-REJET H0</span>"
-               n_rej<-sum(c(W_lev>=Fc,W_bf>=Fc,pb<alpha))
+               rej_lev <- (W_lev >= Fc)
+               rej_bf  <- (W_bf  >= Fc)
+               rej_bar <- (K2    >= Xcb)
+               rl<-if(rej_lev)"<span class='r-ok'>REJET H0</span>" else "<span class='r-warn'>NON-REJET H0</span>"
+               rb_<-if(rej_bf)"<span class='r-ok'>REJET H0</span>" else "<span class='r-warn'>NON-REJET H0</span>"
+               rB<-if(rej_bar)"<span class='r-ok'>REJET H0</span>" else "<span class='r-warn'>NON-REJET H0</span>"
+               n_rej<-sum(c(rej_lev, rej_bf, rej_bar))
                gl <- paste(sapply(seq_len(k), function(i)
                  sprintf("  G%d: n=%d  moy=%s  s=%s  var=%s",i,ni[i],V(mean(grps[[i]])),V(sd(grps[[i]])),V(var(grps[[i]])))), collapse="\n")
                paste(
@@ -1053,14 +1055,14 @@ server <- function(input, output, session) {
                  S(4,"VALEUR OBSERVEE DU TEST"),
                  sprintf("  Test Levene         : W = %s",V(W_lev)),
                  sprintf("  Test Brown-Forsythe : W = %s  (recommande)",V(W_bf)),
-                 sprintf("  Test Bartlett       : K² = %s  p=%s",V(K2),V(pb)),
+                 sprintf("  Test Bartlett       : K² = %s",V(K2)),
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
                  sprintf("  F_crit(alpha=%.2f) = %s   chi2_crit = %s",alpha,V(Fc),V(Xcb)),
-                 sprintf("  Levene        : W=%s  F_crit=%s  → %s",V(W_lev),V(Fc),rl),
-                 sprintf("  Brown-Forsythe: W=%s  F_crit=%s  → %s",V(W_bf),V(Fc),rb_),
-                 sprintf("  Bartlett      : K²=%s  p=%s  → %s",V(K2),V(pb),rB),
+                 sprintf("  Levene        : W=%s  vs F_crit=%s  → %s",V(W_lev),V(Fc),rl),
+                 sprintf("  Brown-Forsythe: W=%s  vs F_crit=%s  → %s",V(W_bf),V(Fc),rb_),
+                 sprintf("  Bartlett      : K²=%s  vs chi2_crit=%s  → %s",V(K2),V(Xcb),rB),
                  S(6,"DECISION ET CONCLUSION"),
-                 if(n_rej>=2)"<span class='r-ok'>  ✔  REJET H0  (majorite des tests)</span>" else if(n_rej==0)"<span class='r-warn'>  ✘  NON-REJET H0  (tous les tests concordent)</span>" else "<span class='r-warn'>  △  RESULTATS DIVERGENTS — interprétez avec prudence</span>",
+                 if(n_rej>=2)"<span class='r-ok'>  ✔  REJET H0  (majorite des tests)</span>" else if(n_rej==0)"<span class='r-warn'>  ✘  NON-REJET H0  (tous les tests concordent)</span>" else "<span class='r-warn'>  △  RESULTATS DIVERGENTS — interpretez avec prudence</span>",
                  INTERP(if(n_rej>=2)"Variances significativement differentes. L'ANOVA classique est deconseille." else if(n_rej==0)"Homoscedasticite. L'ANOVA classique est applicable." else "Resultats divergents. Preferer Brown-Forsythe (plus robuste)."),
                  "", FOOT(nom), sep="\n"
                )
@@ -1083,8 +1085,9 @@ server <- function(input, output, session) {
                dc<-nc2-1; dr<-nr-1; de<-dr*dc
                MSC<-SSC/dc; MSR<-SSR/dr; MSE<-SSE/de; FC<-MSC/MSE; FR<-MSR/MSE
                Fcc<-qf(1-alpha,dc,de); Fcr<-qf(1-alpha,dr,de)
-               dA<-if(FR>=Fcr)"<span class='r-ok'>REJET H0 — Facteur A SIGNIFICATIF</span>" else "<span class='r-warn'>NON-REJET H0 — Facteur A non significatif</span>"
-               dB<-if(FC>=Fcc)"<span class='r-ok'>REJET H0 — Facteur B SIGNIFICATIF</span>" else "<span class='r-warn'>NON-REJET H0 — Facteur B non significatif</span>"
+               ap_A <- (FR <= Fcr); ap_B <- (FC <= Fcc)
+               dA<-if(!ap_A)"<span class='r-ok'>REJET H0 — Facteur A SIGNIFICATIF</span>" else "<span class='r-warn'>NON-REJET H0 — Facteur A non significatif</span>"
+               dB<-if(!ap_B)"<span class='r-ok'>REJET H0 — Facteur B SIGNIFICATIF</span>" else "<span class='r-warn'>NON-REJET H0 — Facteur B non significatif</span>"
                paste(
                  S(1,"DONNEES SAISIES"),
                  sprintf("  Tableau %d x %d   (lignes=niveaux A, colonnes=niveaux B)",nr,nc2),
@@ -1103,9 +1106,10 @@ server <- function(input, output, session) {
                  STAT("F_obs (Facteur A)", FR),
                  STAT("F_obs (Facteur B)", FC),
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
-                 sprintf("  F_crit A = %s   F_crit B = %s   (alpha=%.2f)",V(Fcr),V(Fcc),alpha),
-                 sprintf("  Facteur A : F=%s  F_crit=%s",V(FR),V(Fcr)),
-                 sprintf("  Facteur B : F=%s  F_crit=%s",V(FC),V(Fcc)),
+                 sprintf("  F_crit A = %s   (F(%d,%d), alpha=%.2f)",V(Fcr),dr,de,alpha),
+                 sprintf("  F_crit B = %s   (F(%d,%d), alpha=%.2f)",V(Fcc),dc,de,alpha),
+                 sprintf("  Facteur A : F_obs=%s  vs F_crit=%s",V(FR),V(Fcr)),
+                 sprintf("  Facteur B : F_obs=%s  vs F_crit=%s",V(FC),V(Fcc)),
                  S(6,"DECISION ET CONCLUSION"),
                  sprintf("  Facteur A : %s",dA),
                  sprintf("  Facteur B : %s",dB),
@@ -1128,6 +1132,7 @@ server <- function(input, output, session) {
                res<-chisq.test(mat,correct=yates)
                chi2<-as.numeric(res$statistic); ddl<-as.numeric(res$parameter)
                Xc<-qchisq(1-alpha,df=ddl); n_tot<-sum(mat)
+               ap <- (chi2 <= Xc)
                V_<-sqrt(chi2/(n_tot*(min(nr_m,nc_m)-1)))
                force_v <- min(res$expected)
                iv_<-if(V_<.1)"negligeable" else if(V_<.3)"faible" else if(V_<.5)"moderee" else "forte"
@@ -1148,9 +1153,10 @@ server <- function(input, output, session) {
                  STAT("chi2_obs", chi2),
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
                  sprintf("  ZNR = [ 0 ; %s ]   (chi2(%d), alpha=%.2f)",V(Xc),ddl,alpha),
+                 sprintf("  chi2_crit = %s",V(Xc)),
                  STAT("chi2_obs", chi2),
-                 S(6,"DECISION ET CONCLUSION"), DEC_Z(chi2<=Xc),
-                 INTERP(if(chi2>Xc)sprintf("Les variables sont liees (V de Cramer=%.4f → association %s).",V_,iv_) else "Les deux variables sont independantes."),
+                 S(6,"DECISION ET CONCLUSION"), DEC_Z(ap),
+                 INTERP(if(!ap)sprintf("Les variables sont liees (V de Cramer=%.4f → association %s).",V_,iv_) else "Les deux variables sont independantes."),
                  "", FOOT(nom), sep="\n"
                )
              },
@@ -1162,8 +1168,8 @@ server <- function(input, output, session) {
                n<-length(x)
                if(length(x)!=length(y)) stop(sprintf("X a %d valeurs, Y en a %d.",length(x),length(y)))
                if(n<3) stop("Minimum 3 paires requises.")
-               cov_xy<-sum((x-mean(x))*(y-mean(y)))/n
-               et_x<-sqrt(sum((x-mean(x))^2)/n); et_y<-sqrt(sum((y-mean(y))^2)/n)
+               cov_xy<-sum((x-mean(x))*(y-mean(y)))/(n-1)
+               et_x<-sd(x); et_y<-sd(y)
                rp<-cov_xy/(et_x*et_y)
                if(abs(rp)>=1-1e-9) stop("rp = +/-1 : correlation parfaite, test impossible.")
                tobs<-(rp-r0)*sqrt(n-2)/sqrt(1-rp^2); ddl<-n-2
@@ -1182,8 +1188,8 @@ server <- function(input, output, session) {
                  CL(TRUE,"Normalite bivariee supposee"),
                  CL(TRUE,"Liaison supposee lineaire"),
                  S(4,"VALEUR OBSERVEE DU TEST"),
-                 sprintf("  cov(X,Y) = %s   sigma_X = %s   sigma_Y = %s",V(cov_xy),V(et_x),V(et_y)),
-                 sprintf("  rp = cov(X,Y) / (sigma_X . sigma_Y) = %s  (correlation %s)",V(rp),ir),
+                 sprintf("  cov(X,Y) = %s   s_X = %s   s_Y = %s",V(cov_xy),V(et_x),V(et_y)),
+                 sprintf("  rp = cov(X,Y) / (s_X . s_Y) = %s  (correlation %s)",V(rp),ir),
                  STAT("t_obs = (rp - r0).sqrt(n-2) / sqrt(1-rp²)", tobs),
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
                  ZNR_LINE(znr$str,"t_obs",tobs,alpha),
@@ -1194,16 +1200,17 @@ server <- function(input, output, session) {
                )
              },
              
-             #  15 ─ Correlation de Spearman
+             # 15 ─ Correlation de Spearman
              spearman = {
                x<-pv(input$cor_s_x); y<-pv(input$cor_s_y)
                alpha<-input$cor_s_alpha; alt<-input$cor_s_alt
                if(length(x)!=length(y)) stop(sprintf("X (%d) et Y (%d) longueurs differentes.",length(x),length(y)))
                if(length(x)<3) stop("Minimum 3 paires.")
                n<-length(x)
-               res<-cor.test(x,y,method="spearman",alternative=alt)
-               rs<-as.numeric(res$estimate)
-               ts<-rs*sqrt((n-2)/(1-rs^2))
+               rs <- cor(x, y, method="spearman")
+               ts <- rs * sqrt((n-2) / (1-rs^2))
+               ddl_s <- n-2
+               znr_s <- znr_stud(alpha, alt, ddl_s); ap_s <- znr_s$fn(ts)
                ir<-if(abs(rs)<.3)"faible" else if(abs(rs)<.7)"moderee" else "forte"
                h0<-"rho_s = 0  (pas d'association monotone)"
                h1<-sprintf("rho_s %s 0",if(alt=="two.sided")"!=" else if(alt=="greater")">" else "<")
@@ -1214,7 +1221,7 @@ server <- function(input, output, session) {
                  sprintf("  n=%d   alpha=%.2f",n,alpha),
                  S(2,"FORMULATION DES HYPOTHESES"), HYP(h0,h1),
                  S(3,"LOI DE PROBABILITE ET CONDITIONS DE VALIDITE"),
-                 sprintf("  Loi : <span class='r-value'>Student t (ddl=%d)</span>  (via rangs)",n-2),
+                 sprintf("  Loi : <span class='r-value'>Student t (ddl=%d)</span>  (via rangs)",ddl_s),
                  CL(n>=3,sprintf("n=%d >= 3 paires",n)),
                  CL(TRUE,"Variables ordinales ou continues"),
                  CL(TRUE,"Pas de condition de normalite"),
@@ -1222,11 +1229,11 @@ server <- function(input, output, session) {
                  sprintf("  rho_s = %s  (correlation de Spearman sur les rangs — %s)",V(rs),ir),
                  sprintf("  rho_s² = %s",V(rs^2)),
                  STAT("t_obs = rho_s . sqrt((n-2)/(1-rho_s²))", ts),
-                 sprintf("  p-value = %s",V(res$p.value)),
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
-                 sprintf("  Conclusion via p-value   (alpha=%.2f)",alpha),
-                 S(6,"DECISION ET CONCLUSION"), DEC_P(alpha,res$p.value),
-                 INTERP(if(res$p.value<alpha&&rs>0)sprintf("Association monotone croissante significative (rho_s=%.4f — %s).",rs,ir) else if(res$p.value<alpha&&rs<0)sprintf("Association monotone decroissante significative (rho_s=%.4f — %s).",rs,ir) else sprintf("Pas d'association monotone significative (rho_s=%.4f — %s).",rs,ir)),
+                 ZNR_LINE(znr_s$str,"t_obs",ts,alpha),
+                 sprintf("  t_crit = %s",V(znr_s$crit)),
+                 S(6,"DECISION ET CONCLUSION"), DEC_Z(ap_s),
+                 INTERP(if(!ap_s&&rs>0)sprintf("Association monotone croissante significative (rho_s=%.4f — %s).",rs,ir) else if(!ap_s&&rs<0)sprintf("Association monotone decroissante significative (rho_s=%.4f — %s).",rs,ir) else sprintf("Pas d'association monotone significative (rho_s=%.4f — %s).",rs,ir)),
                  "", FOOT(nom), sep="\n"
                )
              },
@@ -1238,8 +1245,11 @@ server <- function(input, output, session) {
                if(length(x)!=length(y)) stop(sprintf("X (%d) et Y (%d) longueurs differentes.",length(x),length(y)))
                if(length(x)<3) stop("Minimum 3 paires.")
                n<-length(x)
-               res<-cor.test(x,y,method="kendall",alternative=alt)
-               tau<-as.numeric(res$estimate); zk<-as.numeric(res$statistic)
+               tau <- cor(x, y, method="kendall")
+               # Approximation normale pour tau de Kendall
+               sigma_tau <- sqrt((2*(2*n+5)) / (9*n*(n-1)))
+               zk <- tau / sigma_tau
+               znr_k <- znr_norm(alpha, alt); ap_k <- znr_k$fn(zk)
                it<-if(abs(tau)<.2)"faible" else if(abs(tau)<.5)"moderee" else "forte"
                h0<-"tau = 0  (pas de concordance)"; h1<-sprintf("tau %s 0",if(alt=="two.sided")"!=" else if(alt=="greater")">" else "<")
                paste(
@@ -1255,17 +1265,18 @@ server <- function(input, output, session) {
                  CL(TRUE,"Pas de condition de normalite"),
                  S(4,"VALEUR OBSERVEE DU TEST"),
                  sprintf("  tau_K = %s  (concordance %s)",V(tau),it),
-                 STAT("z_obs", zk),
-                 sprintf("  p-value = %s",V(res$p.value)),
+                 sprintf("  sigma_tau = sqrt[2(2n+5)/(9n(n-1))] = %s",V(sigma_tau)),
+                 STAT("Z_obs = tau / sigma_tau", zk),
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
-                 sprintf("  Conclusion via p-value   (alpha=%.2f)",alpha),
-                 S(6,"DECISION ET CONCLUSION"), DEC_P(alpha,res$p.value),
-                 INTERP(if(res$p.value<alpha&&tau>0)sprintf("Concordance positive significative (tau=%.4f — %s).",tau,it) else if(res$p.value<alpha&&tau<0)sprintf("Concordance negative significative (tau=%.4f — %s) : tendance inverse.",tau,it) else sprintf("Pas de concordance significative (tau=%.4f — %s).",tau,it)),
+                 ZNR_LINE(znr_k$str,"Z_obs",zk,alpha),
+                 sprintf("  z_crit = %s",V(znr_k$crit)),
+                 S(6,"DECISION ET CONCLUSION"), DEC_Z(ap_k),
+                 INTERP(if(!ap_k&&tau>0)sprintf("Concordance positive significative (tau=%.4f — %s).",tau,it) else if(!ap_k&&tau<0)sprintf("Concordance negative significative (tau=%.4f — %s) : tendance inverse.",tau,it) else sprintf("Pas de concordance significative (tau=%.4f — %s).",tau,it)),
                  "", FOOT(nom), sep="\n"
                )
              },
              
-             #  17 ─ Regression lineaire simple
+             # 17 ─ Regression lineaire simple
              reg_lin = {
                X<-pv(input$rl_x); Y<-pv(input$rl_y); n<-length(X)
                if(length(X)!=length(Y)) stop(sprintf("X (%d) et Y (%d) longueurs differentes.",length(X),length(Y)))
@@ -1275,7 +1286,6 @@ server <- function(input, output, session) {
                r<-sum((X-xb)*(Y-yb))/sqrt(sum((X-xb)^2)*sum((Y-yb)^2))
                sx<-sd(X); sy<-sd(Y); b<-r*(sy/sx); a<-yb-b*xb
                Yp<-a+b*X; SSres<-sum((Y-Yp)^2); SStot<-sum((Y-yb)^2); R2<-1-SSres/SStot
-               # Test de signification de b
                MSE_<-SSres/(n-2); se_b<-sqrt(MSE_/sum((X-xb)^2)); t_b<-b/se_b; ddl_b<-n-2
                znr_b<-znr_stud(alpha=.05,"bilateral",ddl_b); ap_b<-znr_b$fn(t_b)
                ir<-if(abs(r)<.3)"faible" else if(abs(r)<.7)"moderee" else "forte"
@@ -1303,6 +1313,7 @@ server <- function(input, output, session) {
                  STAT("t_obs (test sur b)", t_b),
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
                  sprintf("  ZNR = %s   (t(%d), alpha=0.05)",znr_b$str,ddl_b),
+                 sprintf("  t_crit = %s",V(znr_b$crit)),
                  STAT("t_obs", t_b),
                  S(6,"DECISION ET CONCLUSION"), DEC_Z(ap_b),
                  INTERP(if(!ap_b&&b>0)sprintf("Pente b=%.4f significativement positive. Y augmente avec X. R²=%.4f.",b,R2) else if(!ap_b&&b<0)sprintf("Pente b=%.4f significativement negative. Y diminue avec X. R²=%.4f.",b,R2) else sprintf("Pente non significative (b=%.4f). Le modele lineaire n'est pas valide. R²=%.4f.",b,R2)),
@@ -1310,7 +1321,7 @@ server <- function(input, output, session) {
                )
              },
              
-             #  18 ─ Test de Wilcoxon
+             # 18 ─ Test de Wilcoxon
              wilcox = {
                avant<-pv(input$wil_avant); apres<-pv(input$wil_apres)
                alpha<-input$wil_alpha; alt<-input$wil_alt
@@ -1357,8 +1368,6 @@ server <- function(input, output, session) {
                } else {
                  mu_w<-n_eff*(n_eff+1)/4; sg_w<-sqrt(n_eff*(n_eff+1)*(2*n_eff+1)/24)
                  Zobs<-(u_stat-mu_w)/sg_w
-                 pval<-switch(alt,two.sided=2*pnorm(abs(Zobs),lower.tail=FALSE),
-                              less=pnorm(Zobs,lower.tail=TRUE),pnorm(Zobs,lower.tail=FALSE))
                  znr<-znr_norm(alpha,alt); ap<-znr$fn(Zobs)
                  paste(
                    S(1,"DONNEES SAISIES"),
@@ -1371,10 +1380,10 @@ server <- function(input, output, session) {
                    sprintf("  W+=%s  W-=%s  u=%s",V(w_plus),V(w_moins),V(u_stat)),
                    sprintf("  mu_W=%s   sigma_W=%s",V(mu_w),V(sg_w)),
                    STAT("Z_obs = (u - mu_W) / sigma_W", Zobs),
-                   sprintf("  p-value = %s",V(pval)),
                    S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
                    ZNR_LINE(znr$str,"Z_obs",Zobs,alpha),
-                   S(6,"DECISION ET CONCLUSION"), DEC_P(alpha,pval),
+                   sprintf("  z_crit = %s",V(znr$crit)),
+                   S(6,"DECISION ET CONCLUSION"), DEC_Z(ap),
                    INTERP(if(!ap)"Difference significative avant/apres." else "Pas de difference significative."),
                    "", FOOT(nom), sep="\n"
                  )
