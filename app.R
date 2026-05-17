@@ -227,9 +227,9 @@ server <- function(input, output, session) {
         pour les etudiants d'Informatique L3 (DevSolution) de l'Universite de Dschang.
         Elle couvre <strong>20 tests</strong> organises en 6 familles et affiche les
         resultats en 6 sections structurees.</p>
-        <h5>Auteur</h5>
+        <h5>Auteurs</h5>
         <p>DevSolution · L3 Informatique, UDs<br/>
-        Contact : <code>emmanueljuniordequa2@gmail.com · 690 624 051</code></p>
+        Contact : <code>devsolution-group@gmail.com</code></p>
         <h5>References</h5>
         <p>M.A. Onabid — Statistiques et Analyse de Donnees, Dept. Maths-Info, UDs<br/>
         Dagnelie (2013) — Statistique theorique et appliquee, De Boeck<br/>
