@@ -11,8 +11,8 @@ CATEGORIES <- list(
   list(id="moyennes", icon="μ", label="Comparaison de Moyennes",
        desc="Student · Normale · ANOVA · Kruskal-Wallis · Mann-Whitney", color=CYAN,
        tests=list(
-         list(id="ttest_small", label="2 moyennes — petits échantillons", desc="Student (variances supposées égales)"),
-         list(id="ztest_large", label="2 moyennes — grands échantillons", desc="Loi Normale (Z-test, n≥30)"),
+         list(id="ttest_small", label="2 moyennes — petits échantillons", desc="Student/Welch avec test F préalable (n < 30)"),
+         list(id="ztest_large", label="2 moyennes — grands échantillons", desc="Z-test — loi Normale (n₁ ≥ 30 et n₂ ≥ 30)"),
          list(id="anova1",      label="ANOVA à 1 facteur",                desc="k groupes (k≥3) — paramétrique"),
          list(id="kruskal",     label="Kruskal-Wallis",                   desc="k groupes (k≥3) — non paramétrique"),
          list(id="mannwhit",    label="Mann-Whitney",                     desc="2 groupes indép. — non paramétrique"),
@@ -23,20 +23,22 @@ CATEGORIES <- list(
        tests=list(
          list(id="prop2",       label="2 proportions",            desc="Test Z — 2 proportions indépendantes"),
          list(id="prop1",       label="Proportion obs. vs p₀",    desc="Test Z — proportion vs valeur théorique"),
-         list(id="chisq_kprop", label="k proportions (Chi-deux)", desc="Chi-deux d'ajustement, k≥2 groupes")
+         list(id="chisq_kprop", label="Ajustement Chi-deux", desc="Test d'ajustement — 5 lois : Uniforme, Personnalisée, Binomiale, Poisson, Normale")
        )),
   list(id="variances", icon="σ²", label="Comparaison de Variances",
-       desc="Fisher · Levene · Bartlett · ANOVA 2 facteurs", color=GOLD,
+       desc="Fisher · Levene · Brown-Forsythe · Bartlett · ANOVA 2 facteurs", color=GOLD,
        tests=list(
-         list(id="fisher_var", label="2 variances (Fisher)",             desc="F-test de Fisher"),
-         list(id="var_k",      label="k variances (k≥3)",                desc="Levene · Bartlett · Brown-Forsythe"),
-         list(id="anova2",     label="ANOVA 2 facteurs sans réplication", desc="Modèle en blocs randomisés")
+         list(id="fisher_var",  label="2 variances — Test de Fisher",          desc="F-test bilatéral/unilatéral — petits échantillons"),
+         list(id="levene",      label="k variances — Test de Levene",           desc="F-test robuste basé sur les écarts à la moyenne"),
+         list(id="brownfors",   label="k variances — Test de Brown-Forsythe",   desc="F-test robuste basé sur les écarts à la médiane"),
+         list(id="bartlett",    label="k variances — Test de Bartlett",         desc="Chi-deux — optimal si normalité vérifiée"),
+         list(id="anova2",      label="ANOVA 2 facteurs sans réplication",       desc="Modèle en blocs complets randomisés")
        )),
   list(id="independance", icon="⊥", label="Indépendance & Corrélation",
        desc="Chi-deux · Pearson · Spearman · Kendall", color="#a78bfa",
        tests=list(
          list(id="chisq_indep", label="Chi-deux d'indépendance", desc="Tableau de contingence r×c"),
-         list(id="pearson",     label="Corrélation de Pearson",  desc="Paramétrique — calcul manuel"),
+         list(id="pearson",     label="Corrélation de Pearson",  desc="Paramétrique — liaison linéaire entre deux variables"),
          list(id="spearman",    label="Corrélation de Spearman", desc="Non paramétrique (rangs)"),
          list(id="kendall",     label="Corrélation de Kendall",  desc="Non paramétrique (concordance)")
        )),
@@ -145,7 +147,7 @@ ui <- fluidPage(
       div(class="app-header",
           div(class="app-logo", "DevSolution · Informatique L3 · UDs"),
           h1(class="app-title", tags$span("Dev"), "Lap"),
-          div(class="app-sub", "18 TESTS STATISTIQUES · SESSIONS INDEPENDANTES"),
+          div(class="app-sub", "20 TESTS STATISTIQUES · SESSIONS INDEPENDANTES"),
           tags$button("A propos", class="btn-about",
                       onclick="Shiny.setInputValue('btn_about', Math.random())")
       ),
@@ -223,7 +225,7 @@ server <- function(input, output, session) {
         <h5>L'application DevLap</h5>
         <p><strong> DevLap</strong> est une interface interactive de tests statistiques
         pour les etudiants d'Informatique L3 (DevSolution) de l'Universite de Dschang.
-        Elle couvre <strong>18 tests</strong> organises en 6 familles et affiche les
+        Elle couvre <strong>20 tests</strong> organises en 6 familles et affiche les
         resultats en 6 sections structurees.</p>
         <h5>Auteur</h5>
         <p>DevSolution · L3 Informatique, UDs<br/>
@@ -316,11 +318,15 @@ server <- function(input, output, session) {
               numericInput(paste0("ckp_o",i),NULL,value=if(i<=length(ex)) ex[[i]] else 10L,min=0,step=1))))
   })
   output$vark_groups_ui <- renderUI({
-    k  <- max(3L, min(8L, as.integer(input$vk_k %||% 3)))
+    # Partagé par levene, brownfors, bartlett — chaque test a son propre préfixe
+    tid <- rv$test_id %||% "levene"
+    pfx <- switch(tid, levene="lv", brownfors="bf", bartlett="bt", "lv")
+    k_inp <- switch(tid, levene=input$lv_k, brownfors=input$bf_k, bartlett=input$bt_k, 3)
+    k  <- max(3L, min(8L, as.integer(k_inp %||% 3)))
     ex <- list("12, 14, 13, 15, 11","9, 11, 10, 8, 12","16, 18, 17, 20, 19","20, 21, 19","5, 6, 4","25, 28, 23","9, 10, 8","2, 3, 1")
     tagList(lapply(seq_len(k), function(i)
       tagList(div(class="input-label",paste("Groupe",i)),
-              textInput(paste0("vk_g",i),NULL,value=if(i<=length(ex)) ex[[i]] else ""))))
+              textInput(paste0(pfx,"_g",i),NULL,value=if(i<=length(ex)) ex[[i]] else ""))))
   })
   output$chisq_rows_ui <- renderUI({
     r  <- max(2L, min(6L, as.integer(input$ci_nrows %||% 2)))
@@ -353,7 +359,7 @@ server <- function(input, output, session) {
       div(class="card-desc",sprintf("Les champs sont pre-remplis avec un exemple, %s. Modifiez puis cliquez Executer.",nom)),
       switch(tid,
              ttest_small = tagList(
-               div(class="card-desc","Hypothese : variances egales (modele pooled)."),
+               div(class="card-desc","Petits échantillons (n < 30) — Le test de Fisher est appliqué automatiquement pour déterminer si les variances sont égales (pooled) ou inégales (Welch)."),
                div(class="input-label","Groupe 1"),
                div(class="input-grid-3",
                    div(div(class="input-label","n₁"),numericInput("ts_n1",NULL,12,min=2,step=1)),
@@ -365,8 +371,8 @@ server <- function(input, output, session) {
                    div(div(class="input-label","x̄₂"),numericInput("ts_xbar2",NULL,21.8,step=.01)),
                    div(div(class="input-label","s₂"),numericInput("ts_s2",NULL,2.9,min=.001,step=.01))),
                div(class="input-grid",
-                   div(div(class="input-label","Seuil α"),numericInput("ts_alpha",NULL,.05,min=.001,max=.20,step=.01)),
-                   div(div(class="input-label","Alternative"),selectInput("ts_alt",NULL,c("Bilateral (μ₁≠μ₂)"="bilateral","μ₁>μ₂"="droite","μ₁<μ₂"="gauche")))),RUN),
+                   div(div(class="input-label","Seuil α (commun aux deux tests)"),numericInput("ts_alpha",NULL,.05,min=.001,max=.20,step=.01)),
+                   div(div(class="input-label","Alternative (test de moyennes)"),selectInput("ts_alt",NULL,c("Bilateral (μ₁≠μ₂)"="bilateral","μ₁>μ₂"="droite","μ₁<μ₂"="gauche")))),RUN),
              ztest_large = tagList(
                div(class="input-label","Groupe 1 (n≥30)"),
                div(class="input-grid-3",
@@ -429,13 +435,41 @@ server <- function(input, output, session) {
                selectInput("p1_alt",NULL,c("Bilateral (p≠p₀)"="two.sided","p>p₀"="greater","p<p₀"="less")),RUN),
              chisq_kprop = tagList(
                div(class="input-grid",
-                   div(div(class="input-label","Nombre de groupes (2-8)"),numericInput("ckp_k",NULL,3,min=2,max=8,step=1)),
+                   div(div(class="input-label","Nombre de groupes/classes k (2-8)"),numericInput("ckp_k",NULL,3,min=2,max=8,step=1)),
                    div(div(class="input-label","Seuil α"),numericInput("ckp_alpha",NULL,.05,min=.001,max=.20,step=.01))),
-               div(class="input-label","Loi sous H₀"),
-               selectInput("ckp_mode",NULL,c("Equirepartition (pi=1/k)"="equal","Probabilites personnalisees"="custom")),
+               div(class="input-label","Loi théorique sous H₀"),
+               selectInput("ckp_mode",NULL,c(
+                 "1 — Uniforme discrète (pi = 1/k)"       = "equal",
+                 "2 — Probabilités personnalisées"         = "custom",
+                 "3 — Binomiale B(m, p)"                  = "binom",
+                 "4 — Poisson P(λ)"                       = "poisson",
+                 "5 — Normale N(μ, σ)"                    = "normale"
+               )),
+               # Loi personnalisée
                conditionalPanel("input.ckp_mode=='custom'",
-                                div(class="input-label","Probabilites p₁,...,pₖ (somme=1)"),
-                                textInput("ckp_probs",NULL,placeholder="ex : 0.50, 0.30, 0.20")),
+                 div(class="input-label","Probabilités p₁,...,pₖ (somme = 1)"),
+                 textInput("ckp_probs",NULL,placeholder="ex : 0.50, 0.30, 0.20")),
+               # Loi Binomiale
+               conditionalPanel("input.ckp_mode=='binom'",
+                 div(class="input-grid",
+                   div(div(class="input-label","m (nb d'épreuves)"),numericInput("ckp_binom_m",NULL,5,min=1,step=1)),
+                   div(div(class="input-label","p (prob. de succès)"),numericInput("ckp_binom_p",NULL,0.4,min=0.001,max=0.999,step=0.01))),
+                 div(class="input-label","Les k classes représentent les valeurs 0, 1, 2, ..., k-1"),
+                 selectInput("ckp_binom_queue",NULL,c("Non — classes exactes"="FALSE","Oui — dernier groupe = P(X ≥ k-1)"="TRUE"))),
+               # Loi Poisson
+               conditionalPanel("input.ckp_mode=='poisson'",
+                 div(div(class="input-label","λ (paramètre de Poisson)"),numericInput("ckp_lambda",NULL,2,min=0.01,step=0.1)),
+                 div(class="input-label","Les k classes représentent les valeurs 0, 1, 2, ..., k-1"),
+                 selectInput("ckp_pois_queue",NULL,c("Non — classes exactes"="FALSE","Oui — dernier groupe = P(X ≥ k-1)"="TRUE"))),
+               # Loi Normale
+               conditionalPanel("input.ckp_mode=='normale'",
+                 div(class="input-grid",
+                   div(div(class="input-label","μ (moyenne)"),numericInput("ckp_mu",NULL,0,step=0.1)),
+                   div(div(class="input-label","σ (écart-type > 0)"),numericInput("ckp_sigma",NULL,1,min=0.001,step=0.1))),
+                 div(class="input-label","Bornes inférieures des k classes (séparées par virgules, -Inf pour la 1ère)"),
+                 textInput("ckp_bornes_inf",NULL,placeholder="ex : -Inf, -1, 0, 1"),
+                 div(class="input-label","Bornes supérieures des k classes (séparées par virgules, Inf pour la dernière)"),
+                 textInput("ckp_bornes_sup",NULL,placeholder="ex : -1, 0, 1, Inf")),
                uiOutput("kprop_groups_ui"),RUN),
              fisher_var = tagList(
                div(class="input-grid",
@@ -447,10 +481,23 @@ server <- function(input, output, session) {
                div(class="input-grid",
                    div(div(class="input-label","Seuil α"),numericInput("fv_alpha",NULL,.05,min=.001,max=.20,step=.01)),
                    div(div(class="input-label","Type de test"),selectInput("fv_type",NULL,c("Bilateral (σ₁²≠σ₂²)"="bilateral","σ₁²>σ₂²"="droite","σ₁²<σ₂²"="gauche")))),RUN),
-             var_k = tagList(
+             levene = tagList(
+               div(class="card-desc","Test de Levene : homogénéité des variances basée sur les écarts à la moyenne de groupe. Robuste à la non-normalité modérée."),
                div(class="input-grid",
-                   div(div(class="input-label","Nombre de groupes (3-8)"),numericInput("vk_k",NULL,3,min=3,max=8,step=1)),
-                   div(div(class="input-label","Seuil α"),numericInput("vk_alpha",NULL,.05,min=.001,max=.20,step=.01))),
+                   div(div(class="input-label","Nombre de groupes k (3–8)"),numericInput("lv_k",NULL,3,min=3,max=8,step=1)),
+                   div(div(class="input-label","Seuil α"),numericInput("lv_alpha",NULL,.05,min=.001,max=.20,step=.01))),
+               uiOutput("vark_groups_ui"),RUN),
+             brownfors = tagList(
+               div(class="card-desc","Test de Brown-Forsythe : variante de Levene utilisant les écarts à la médiane. Le plus robuste des trois à la non-normalité."),
+               div(class="input-grid",
+                   div(div(class="input-label","Nombre de groupes k (3–8)"),numericInput("bf_k",NULL,3,min=3,max=8,step=1)),
+                   div(div(class="input-label","Seuil α"),numericInput("bf_alpha",NULL,.05,min=.001,max=.20,step=.01))),
+               uiOutput("vark_groups_ui"),RUN),
+             bartlett = tagList(
+               div(class="card-desc","Test de Bartlett : test optimal si les populations sont normales. Très sensible à la non-normalité — à utiliser uniquement si la normalité est vérifiée."),
+               div(class="input-grid",
+                   div(div(class="input-label","Nombre de groupes k (3–8)"),numericInput("bt_k",NULL,3,min=3,max=8,step=1)),
+                   div(div(class="input-label","Seuil α"),numericInput("bt_alpha",NULL,.05,min=.001,max=.20,step=.01))),
                uiOutput("vark_groups_ui"),RUN),
              anova2 = tagList(
                div(class="card-desc","Chaque colonne = un niveau du facteur B. Meme longueur (= niveaux du facteur A)."),
@@ -587,14 +634,14 @@ server <- function(input, output, session) {
     }
   }
   
-  # 18 tests
+  # 20 tests
   compute_test <- reactive({
     req(rv$test_id)
     tid <- rv$test_id; nom <- rv$nom
     tryCatch({
       switch(tid,
              
-             # 1 ─ t-test Student 2 indep.
+             # 1 ─ t-test Student 2 indep. (avec test F préalable)
              ttest_small = {
                n1<-input$ts_n1; xb1<-input$ts_xbar1; s1<-input$ts_s1
                n2<-input$ts_n2; xb2<-input$ts_xbar2; s2<-input$ts_s2
@@ -603,34 +650,84 @@ server <- function(input, output, session) {
                if(is.na(n2)||n2<2) stop("n₂ doit etre un entier >= 2.")
                if(is.na(s1)||s1<=0) stop("s₁ doit etre strictement positif.")
                if(is.na(s2)||s2<=0) stop("s₂ doit etre strictement positif.")
-               Sp <- sqrt(((n1-1)*s1^2+(n2-1)*s2^2)/(n1+n2-2))
-               se <- Sp*sqrt(1/n1+1/n2)
-               tobs <- (xb1-xb2)/se; ddl <- n1+n2-2
-               znr  <- znr_stud(alpha,alt,ddl); ap <- znr$fn(tobs)
+
+               # ── ETAPE PRÉLIMINAIRE : TEST DE FISHER (homogénéité des variances) ──
+               v1<-s1^2; v2<-s2^2
+               if(v1>=v2){ Fobs_<-v1/v2; dfn_<-n1-1; dfd_<-n2-1
+               } else    { Fobs_<-v2/v1; dfn_<-n2-1; dfd_<-n1-1 }
+               Fc_ <- qf(1-alpha/2, dfn_, dfd_)   # test bilatéral pour les variances
+               variances_egales <- (Fobs_ < Fc_)
+               fisher_znr <- sprintf("[ 0 ; %s ]  (F(%d,%d), α/2=%.3f)", V(Fc_), dfn_, dfd_, alpha/2)
+
                alt_lbl <- if(alt=="bilateral")"bilateral" else if(alt=="droite")"unilateral droit" else "unilateral gauche"
                h0 <- "μ₁ = μ₂"; h1 <- if(alt=="bilateral")"μ₁ ≠ μ₂" else if(alt=="droite")"μ₁ > μ₂" else "μ₁ < μ₂"
-               concl <- if(ap) "A ce niveau de signification, on ne peut pas conclure que les deux moyennes sont differentes." else
-                 sprintf("Les moyennes sont significativement differentes (μ₁%s%.4f, μ₂%s%.4f).",
-                         if(xb1>xb2)">" else "<",xb1,if(xb1>xb2)"<" else ">",xb2)
+
+               # ── TEST DE MOYENNES : selon le résultat du test de Fisher ──
+               if(variances_egales){
+                 # Variances égales → Student pooled
+                 Sp  <- sqrt(((n1-1)*v1+(n2-1)*v2)/(n1+n2-2))
+                 se  <- Sp*sqrt(1/n1+1/n2)
+                 tobs <- (xb1-xb2)/se; ddl <- n1+n2-2
+                 znr  <- znr_stud(alpha,alt,ddl); ap <- znr$fn(tobs)
+                 bloc_calcul <- paste(
+                   "  → Variances egales confirmees : modele POOLED",
+                   sprintf("  Sp (ecart-type poole) = sqrt[((n1-1)s1²+(n2-1)s2²)/(n1+n2-2)] = %s", V(Sp)),
+                   sprintf("  SE = Sp × sqrt(1/n₁ + 1/n₂) = %s", V(se)),
+                   sprintf("  ddl = n₁ + n₂ - 2 = %d", ddl),
+                   STAT("t_obs = (x̄₁ - x̄₂) / SE", tobs),
+                   sep="\n")
+                 loi_lbl <- sprintf("Student t  (ddl = %d)  — variances egales (pooled)", ddl)
+                 concl <- if(ap)"Pas de difference significative entre les deux moyennes." else
+                   sprintf("Moyennes significativement differentes (test pooled, ddl=%d).", ddl)
+                 znr_moy <- znr
+               } else {
+                 # Variances inégales → Welch (Satterthwaite)
+                 se   <- sqrt(v1/n1 + v2/n2)
+                 tobs <- (xb1-xb2)/se
+                 mu_  <- (v1/n1)/(v1/n1+v2/n2)
+                 ddl  <- 1/(mu_^2/(n1-1)+(1-mu_)^2/(n2-1))
+                 znr  <- znr_stud(alpha,alt,ddl); ap <- znr$fn(tobs)
+                 bloc_calcul <- paste(
+                   "  → Variances inegales : modele de WELCH (Satterthwaite)",
+                   sprintf("  SE = sqrt(s1²/n1 + s2²/n2) = %s", V(se)),
+                   sprintf("  ddl Satterthwaite = 1 / [μ²/(n1-1) + (1-μ)²/(n2-1)] = %.4f", ddl),
+                   STAT("t_obs = (x̄₁ - x̄₂) / SE", tobs),
+                   sep="\n")
+                 loi_lbl <- sprintf("Student t  (ddl = %.2f)  — variances inegales (Welch)", ddl)
+                 concl <- if(ap)"Pas de difference significative entre les deux moyennes." else
+                   sprintf("Moyennes significativement differentes (test de Welch, ddl=%.2f).", ddl)
+                 znr_moy <- znr
+               }
+
                paste(
                  S(1,"DONNEES SAISIES"),
-                 sprintf("  Groupe 1 : n₁=%d   x̄₁=%s   s₁=%s", n1,V(xb1),V(s1)),
-                 sprintf("  Groupe 2 : n₂=%d   x̄₂=%s   s₂=%s", n2,V(xb2),V(s2)),
+                 sprintf("  Groupe 1 : n₁=%d   x̄₁=%s   s₁=%s   s₁²=%s", n1,V(xb1),V(s1),V(v1)),
+                 sprintf("  Groupe 2 : n₂=%d   x̄₂=%s   s₂=%s   s₂²=%s", n2,V(xb2),V(s2),V(v2)),
                  sprintf("  Seuil α = %.2f   Test %s", alpha, alt_lbl),
                  S(2,"FORMULATION DES HYPOTHESES"), HYP(h0,h1),
                  S(3,"LOI DE PROBABILITE ET CONDITIONS DE VALIDITE"),
-                 sprintf("  Loi : <span class='r-value'>Student t  (ddl = %d)</span>", ddl),
-                 CL(n1>=2, sprintf("n₁ = %d >= 2 (taille minimale)", n1)),
-                 CL(n2>=2, sprintf("n₂ = %d >= 2 (taille minimale)", n2)),
+                 sprintf("  Loi finale : <span class='r-value'>%s</span>", loi_lbl),
+                 CL(n1>=2, sprintf("n₁ = %d >= 2", n1)),
+                 CL(n2>=2, sprintf("n₂ = %d >= 2", n2)),
+                 CL(n1<30, sprintf("n₁ = %d < 30  (petits echantillons → loi de Student)", n1)),
+                 CL(n2<30, sprintf("n₂ = %d < 30  (petits echantillons → loi de Student)", n2)),
                  CL(TRUE,  "Normalite des populations supposee"),
-                 CL(TRUE,  "Variances supposees egales (modele pooled)"),
                  S(4,"VALEUR OBSERVEE DU TEST"),
-                 sprintf("  Sp (ecart-type poole) = %s", V(Sp)),
-                 sprintf("  SE = Sp . sqrt(1/n₁ + 1/n₂) = %s", V(se)),
-                 STAT("t_obs = (x̄₁ - x̄₂) / SE", tobs),
+                 "  ┌─ TEST PRÉLIMINAIRE DE FISHER (egalite des variances) ─────────",
+                 sprintf("  │  H₀ : σ₁² = σ₂²   (test bilateral, seuil α=%.2f)", alpha),
+                 sprintf("  │  F_obs = max(s²)/min(s²) = %.4f/%.4f = %s", max(v1,v2), min(v1,v2), V(Fobs_)),
+                 sprintf("  │  ZNR  = %s", fisher_znr),
+                 if(variances_egales)
+                   sprintf("  │  %s ∈ ZNR  → <span class='r-cond-ok'>H₀ non rejetee : variances EGALES</span>", V(Fobs_))
+                 else
+                   sprintf("  │  %s ∉ ZNR  → <span class='r-warn'>H₀ rejetee : variances INEGALES</span>", V(Fobs_)),
+                 "  └────────────────────────────────────────────────────────────────",
+                 "  ┌─ TEST DE MOYENNES ──────────────────────────────────────────────",
+                 bloc_calcul,
+                 "  └────────────────────────────────────────────────────────────────",
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
-                 ZNR_LINE(znr$str,"t_obs",tobs,alpha),
-                 sprintf("  Point critique t_crit = %s   (loi t, ddl=%d, α=%.2f)", V(znr$crit), ddl, alpha),
+                 ZNR_LINE(znr_moy$str,"t_obs",tobs,alpha),
+                 sprintf("  t_crit = %s", V(znr_moy$crit)),
                  S(6,"DECISION ET CONCLUSION"), DEC_Z(ap), INTERP(concl),
                  "", FOOT(nom), sep="\n"
                )
@@ -923,7 +1020,7 @@ server <- function(input, output, session) {
                )
              },
              
-             # 9 ─ k Proportions Chi-deux
+             # 9 ─ Chi-deux d'ajustement (5 lois)
              chisq_kprop = {
                k    <- max(2L,min(8L,as.integer(input$ckp_k%||%3)))
                alpha<-input$ckp_alpha; mode<-input$ckp_mode
@@ -933,28 +1030,87 @@ server <- function(input, output, session) {
                  as.integer(v)
                })
                n_tot<-sum(obs); if(n_tot==0) stop("La somme des effectifs est nulle.")
-               tp <- if(mode=="equal") rep(1/k,k) else {
-                 p<-pv(input$ckp_probs)
-                 if(length(p)!=k) stop(sprintf("%d groupes mais %d probabilites.",k,length(p)))
-                 if(abs(sum(p)-1)>1e-6) stop(sprintf("Les probabilites somment a %.4f != 1.",sum(p)))
-                 p
-               }
+
+               loi_lbl <- switch(mode,
+                 equal   = "Uniforme discrete  (pi = 1/k)",
+                 custom  = "Personnalisee",
+                 binom   = sprintf("Binomiale B(m=%d, p=%.4f)", as.integer(input$ckp_binom_m%||%5), input$ckp_binom_p%||%0.4),
+                 poisson = sprintf("Poisson P(lambda=%.4f)", input$ckp_lambda%||%2),
+                 normale = sprintf("Normale N(mu=%.4f, sigma=%.4f)", input$ckp_mu%||%0, input$ckp_sigma%||%1),
+                 "?"
+               )
+
+               tp <- switch(mode,
+                 equal = rep(1/k, k),
+                 custom = {
+                   p <- pv(input$ckp_probs)
+                   if(length(p)!=k) stop(sprintf("%d groupes mais %d probabilites saisies.",k,length(p)))
+                   if(abs(sum(p)-1)>1e-6) stop(sprintf("Les probabilites somment a %.4f != 1.",sum(p)))
+                   p
+                 },
+                 binom = {
+                   m_ <- as.integer(input$ckp_binom_m%||%5)
+                   p_ <- input$ckp_binom_p%||%0.4
+                   if(is.na(m_)||m_<1) stop("m doit etre un entier >= 1.")
+                   if(is.na(p_)||p_<=0||p_>=1) stop("p doit etre dans ]0,1[.")
+                   probs_ <- dbinom(0:(k-1), size=m_, prob=p_)
+                   if(as.logical(input$ckp_binom_queue%||%"FALSE")) probs_[k] <- 1 - sum(probs_[-k])
+                   probs_ / sum(probs_)
+                 },
+                 poisson = {
+                   lam <- input$ckp_lambda%||%2
+                   if(is.na(lam)||lam<=0) stop("lambda doit etre strictement positif.")
+                   probs_ <- dpois(0:(k-1), lambda=lam)
+                   if(as.logical(input$ckp_pois_queue%||%"FALSE")) probs_[k] <- 1 - sum(probs_[-k])
+                   probs_ / sum(probs_)
+                 },
+                 normale = {
+                   mu_  <- input$ckp_mu%||%0
+                   sig_ <- input$ckp_sigma%||%1
+                   if(is.na(sig_)||sig_<=0) stop("sigma doit etre strictement positif.")
+                   parse_b <- function(txt){
+                     parts <- unlist(strsplit(gsub("\\s","",txt),","))
+                     sapply(parts,function(x){
+                       xl<-tolower(x)
+                       if(xl=="-inf")-Inf else if(xl %in% c("inf","+inf")) Inf else suppressWarnings(as.numeric(x))
+                     })
+                   }
+                   bi <- parse_b(input$ckp_bornes_inf%||%"-Inf,0")
+                   bs <- parse_b(input$ckp_bornes_sup%||%"0,Inf")
+                   if(length(bi)!=k) stop(sprintf("Il faut %d bornes inferieures (actuel: %d).",k,length(bi)))
+                   if(length(bs)!=k) stop(sprintf("Il faut %d bornes superieures (actuel: %d).",k,length(bs)))
+                   pr_ <- pnorm(bs,mu_,sig_) - pnorm(bi,mu_,sig_)
+                   pr_ / sum(pr_)
+                 },
+                 stop("Loi non reconnue.")
+               )
+
                theo<-n_tot*tp; cond_ei <- all(theo>=5)
-               if(!cond_ei) stop(sprintf("Effectifs theoriques < 5 (min=%.2f). Augmentez n ou regroupez.",min(theo)))
+               if(!cond_ei) stop(sprintf("Effectifs theoriques < 5 (min=%.2f). Augmentez n ou regroupez les classes.",min(theo)))
                chi2<-sum((obs-theo)^2/theo); ddl<-k-1; Xc<-qchisq(1-alpha,df=ddl)
                ap <- (chi2 <= Xc)
                tl <- paste(sapply(seq_len(k), function(i)
                  sprintf("  G%d: Oi=%d  Ei=%s  pi=%s  contrib=%s",
                          i,obs[i],V(theo[i]),V(tp[i]),V((obs[i]-theo[i])^2/theo[i]))), collapse="\n")
+               loi_detail <- switch(mode,
+                 equal   = "  Chaque classe a la meme probabilite theorique 1/k.",
+                 custom  = "  Probabilites saisies manuellement.",
+                 binom   = sprintf("  Classes = X=0,1,...,k-1 de B(m=%d, p=%.4f).", as.integer(input$ckp_binom_m%||%5), input$ckp_binom_p%||%0.4),
+                 poisson = sprintf("  Classes = X=0,1,...,k-1 de P(lambda=%.4f).", input$ckp_lambda%||%2),
+                 normale = sprintf("  Probabilites = P(bi <= X < bs) sous N(mu=%.4f, sigma=%.4f).", input$ckp_mu%||%0, input$ckp_sigma%||%1)
+               )
                paste(
                  S(1,"DONNEES SAISIES"), tl,
-                 sprintf("  k=%d  n=%d  alpha=%.2f  Loi H0 : %s",k,n_tot,alpha,if(mode=="equal")"equirepartition" else "personnalisee"),
+                 sprintf("  k=%d classes   n=%d   alpha=%.2f",k,n_tot,alpha),
                  S(2,"FORMULATION DES HYPOTHESES"),
-                 HYP("La distribution suit la loi theorique","Au moins une proportion differe de la loi theorique"),
+                 HYP("La distribution suit la loi theorique choisie",
+                     "Au moins une proportion differe de la loi theorique"),
                  S(3,"LOI DE PROBABILITE ET CONDITIONS DE VALIDITE"),
-                 sprintf("  Loi : <span class='r-value'>Chi-deux chi2(%d)</span>",ddl),
+                 sprintf("  Loi theorique H0 : <span class='r-value'>%s</span>", loi_lbl),
+                 sprintf("  Loi du test      : <span class='r-value'>Chi-deux chi2(%d)</span>", ddl),
+                 loi_detail,
                  CL(cond_ei,sprintf("Tous les Ei >= 5  (Ei min = %.2f)",min(theo))),
-                 CL(n_tot>=30,"n total >= 30"),
+                 CL(n_tot>=30,sprintf("n total = %d >= 30",n_tot)),
                  S(4,"VALEUR OBSERVEE DU TEST"),
                  "  chi2_obs = Sum[(Oi - Ei)² / Ei]",
                  STAT("chi2_obs", chi2),
@@ -1011,63 +1167,169 @@ server <- function(input, output, session) {
                )
              },
              
-             # 11 ─ k Variances Levene / Bartlett / Brown-Forsythe
-             var_k = {
-               k    <- max(3L,min(8L,as.integer(input$vk_k%||%3)))
-               alpha<-input$vk_alpha
+             # ── Fonction interne commune aux 3 tests k-variances ──────────────
+             # 11a ─ Test de Levene
+             levene = {
+               k    <- max(3L,min(8L,as.integer(input$lv_k%||%3)))
+               alpha<-input$lv_alpha
                grps <- lapply(seq_len(k), function(i){
-                 v<-pv(input[[paste0("vk_g",i)]])
-                 if(length(v)<2) stop(sprintf("Groupe %d : au moins 2 valeurs.",i)); v
+                 v<-pv(input[[paste0("lv_g",i)]])
+                 if(length(v)<2) stop(sprintf("Groupe %d : au moins 2 valeurs requises.",i)); v
                })
                ni<-sapply(grps,length); N<-sum(ni)
                y<-unlist(grps); gf<-factor(rep(seq_len(k),ni))
-               mi<-sapply(grps,mean)
-               Zl<-lapply(seq_along(grps),function(i) abs(grps[[i]]-mi[i]))
-               Zml<-sapply(Zl,mean); Z..<-sum(ni*Zml)/N
-               W_lev<-((N-k)/(k-1))*sum(ni*(Zml-Z..)^2)/sum(sapply(seq_along(grps),function(i) sum((Zl[[i]]-Zml[i])^2)))
-               medi<-sapply(grps,median)
-               Zbf<-lapply(seq_along(grps),function(i) abs(grps[[i]]-medi[i]))
-               Zmbf<-sapply(Zbf,mean); Z..bf<-sum(ni*Zmbf)/N
-               W_bf<-((N-k)/(k-1))*sum(ni*(Zmbf-Z..bf)^2)/sum(sapply(seq_along(grps),function(i) sum((Zbf[[i]]-Zmbf[i])^2)))
-               rb<-bartlett.test(y~gf); K2<-as.numeric(rb$statistic)
-               Fc<-qf(1-alpha,k-1,N-k); Xcb<-qchisq(1-alpha,df=k-1)
-               rej_lev <- (W_lev >= Fc)
-               rej_bf  <- (W_bf  >= Fc)
-               rej_bar <- (K2    >= Xcb)
-               rl<-if(rej_lev)"<span class='r-ok'>REJET H0</span>" else "<span class='r-warn'>NON-REJET H0</span>"
-               rb_<-if(rej_bf)"<span class='r-ok'>REJET H0</span>" else "<span class='r-warn'>NON-REJET H0</span>"
-               rB<-if(rej_bar)"<span class='r-ok'>REJET H0</span>" else "<span class='r-warn'>NON-REJET H0</span>"
-               n_rej<-sum(c(rej_lev, rej_bf, rej_bar))
-               gl <- paste(sapply(seq_len(k), function(i)
-                 sprintf("  G%d: n=%d  moy=%s  s=%s  var=%s",i,ni[i],V(mean(grps[[i]])),V(sd(grps[[i]])),V(var(grps[[i]])))), collapse="\n")
+               # Écarts à la moyenne de chaque groupe
+               mi  <- sapply(grps,mean)
+               Zl  <- lapply(seq_along(grps), function(i) abs(grps[[i]] - mi[i]))
+               Zml <- sapply(Zl,mean)
+               Z.. <- sum(ni*Zml)/N
+               # Statistique W de Levene
+               SSB <- sum(ni*(Zml-Z..)^2)
+               SSW <- sum(sapply(seq_along(grps), function(i) sum((Zl[[i]]-Zml[i])^2)))
+               W   <- ((N-k)/(k-1)) * SSB / SSW
+               d1  <- k-1; d2 <- N-k
+               Fc  <- qf(1-alpha, d1, d2)
+               ap  <- (W <= Fc)
+               gl  <- paste(sapply(seq_len(k), function(i)
+                 sprintf("  G%d: n=%d  moy=%s  s=%s  var=%s  |Zij|moy=%s",
+                         i,ni[i],V(mean(grps[[i]])),V(sd(grps[[i]])),V(var(grps[[i]])),V(Zml[i]))), collapse="\n")
                paste(
                  S(1,"DONNEES SAISIES"), gl,
-                 sprintf("  k=%d groupes   N=%d obs.   alpha=%.2f",k,N,alpha),
+                 sprintf("  k=%d groupes   N=%d obs. total   alpha=%.2f",k,N,alpha),
                  S(2,"FORMULATION DES HYPOTHESES"),
-                 HYP("sigma1² = sigma2² = ... = sigmak²","Au moins une variance differe"),
+                 HYP("sigma1² = sigma2² = ... = sigmak²  (homoscedasticite)",
+                     "Au moins deux variances sont differentes"),
                  S(3,"LOI DE PROBABILITE ET CONDITIONS DE VALIDITE"),
-                 "  3 tests calcules simultanement :",
-                 "  Levene       → Loi F(k-1, N-k)  — robuste si non-normalite",
-                 "  Brown-Forsythe → Loi F(k-1, N-k)  — le plus robuste",
-                 "  Bartlett     → Loi chi2(k-1)     — sensible a la non-normalite",
-                 CL(k>=3,sprintf("k=%d >= 3",k)),
-                 CL(all(ni>=2),"Chaque groupe a au moins 2 observations"),
+                 sprintf("  Loi : <span class='r-value'>Fisher F(%d, %d)</span>",d1,d2),
+                 "  Principe : on remplace chaque xij par Zij = |xij - moy_i|",
+                 "             puis on effectue une ANOVA a 1 facteur sur les Zij",
+                 "  Avantage : robuste a la non-normalite moderee",
+                 CL(k>=3, sprintf("k=%d >= 3 groupes",k)),
+                 CL(all(ni>=2), "Chaque groupe a au moins 2 observations"),
+                 CL(TRUE, "Independance des groupes supposee"),
                  S(4,"VALEUR OBSERVEE DU TEST"),
-                 sprintf("  Test Levene         : W = %s",V(W_lev)),
-                 sprintf("  Test Brown-Forsythe : W = %s  (recommande)",V(W_bf)),
-                 sprintf("  Test Bartlett       : K² = %s",V(K2)),
+                 sprintf("  Zij = |xij - moy_i|  pour chaque groupe i"),
+                 sprintf("  SSB (entre Z..) = %s   SSW (intra groupes) = %s",V(SSB),V(SSW)),
+                 sprintf("  W = [(N-k)/(k-1)] * SSB / SSW"),
+                 STAT("W_obs (Levene)", W),
                  S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
-                 sprintf("  F_crit(alpha=%.2f) = %s   chi2_crit = %s",alpha,V(Fc),V(Xcb)),
-                 sprintf("  Levene        : W=%s  vs F_crit=%s  → %s",V(W_lev),V(Fc),rl),
-                 sprintf("  Brown-Forsythe: W=%s  vs F_crit=%s  → %s",V(W_bf),V(Fc),rb_),
-                 sprintf("  Bartlett      : K²=%s  vs chi2_crit=%s  → %s",V(K2),V(Xcb),rB),
-                 S(6,"DECISION ET CONCLUSION"),
-                 if(n_rej>=2)"<span class='r-ok'>  ✔  REJET H0  (majorite des tests)</span>" else if(n_rej==0)"<span class='r-warn'>  ✘  NON-REJET H0  (tous les tests concordent)</span>" else "<span class='r-warn'>  △  RESULTATS DIVERGENTS — interpretez avec prudence</span>",
-                 INTERP(if(n_rej>=2)"Variances significativement differentes. L'ANOVA classique est deconseille." else if(n_rej==0)"Homoscedasticite. L'ANOVA classique est applicable." else "Resultats divergents. Preferer Brown-Forsythe (plus robuste)."),
+                 sprintf("  ZNR = [ 0 ; %s ]   (F(%d,%d), alpha=%.2f)",V(Fc),d1,d2,alpha),
+                 sprintf("  F_crit = %s",V(Fc)),
+                 STAT("W_obs",W),
+                 S(6,"DECISION ET CONCLUSION"), DEC_Z(ap),
+                 INTERP(if(!ap)"Variances significativement differentes (heteroscedasticite). L'ANOVA classique est deconseille — envisager Welch ou Kruskal-Wallis." else "Homoscedasticite non rejetee. Les variances peuvent etre supposees egales."),
                  "", FOOT(nom), sep="\n"
                )
              },
-             
+
+             # 11b ─ Test de Brown-Forsythe
+             brownfors = {
+               k    <- max(3L,min(8L,as.integer(input$bf_k%||%3)))
+               alpha<-input$bf_alpha
+               grps <- lapply(seq_len(k), function(i){
+                 v<-pv(input[[paste0("bf_g",i)]])
+                 if(length(v)<2) stop(sprintf("Groupe %d : au moins 2 valeurs requises.",i)); v
+               })
+               ni<-sapply(grps,length); N<-sum(ni)
+               y<-unlist(grps); gf<-factor(rep(seq_len(k),ni))
+               # Écarts à la MÉDIANE (différence vs Levene)
+               medi <- sapply(grps,median)
+               Zbf  <- lapply(seq_along(grps), function(i) abs(grps[[i]] - medi[i]))
+               Zmbf <- sapply(Zbf,mean)
+               Z..bf<- sum(ni*Zmbf)/N
+               # Statistique W de Brown-Forsythe
+               SSB  <- sum(ni*(Zmbf-Z..bf)^2)
+               SSW  <- sum(sapply(seq_along(grps), function(i) sum((Zbf[[i]]-Zmbf[i])^2)))
+               W_bf <- ((N-k)/(k-1)) * SSB / SSW
+               d1   <- k-1; d2 <- N-k
+               Fc   <- qf(1-alpha, d1, d2)
+               ap   <- (W_bf <= Fc)
+               gl   <- paste(sapply(seq_len(k), function(i)
+                 sprintf("  G%d: n=%d  med=%s  moy=%s  var=%s  |Zij|moy=%s",
+                         i,ni[i],V(medi[i]),V(mean(grps[[i]])),V(var(grps[[i]])),V(Zmbf[i]))), collapse="\n")
+               paste(
+                 S(1,"DONNEES SAISIES"), gl,
+                 sprintf("  k=%d groupes   N=%d obs. total   alpha=%.2f",k,N,alpha),
+                 S(2,"FORMULATION DES HYPOTHESES"),
+                 HYP("sigma1² = sigma2² = ... = sigmak²  (homoscedasticite)",
+                     "Au moins deux variances sont differentes"),
+                 S(3,"LOI DE PROBABILITE ET CONDITIONS DE VALIDITE"),
+                 sprintf("  Loi : <span class='r-value'>Fisher F(%d, %d)</span>",d1,d2),
+                 "  Principe : identique a Levene mais Zij = |xij - med_i| (mediane)",
+                 "             la mediane est plus robuste aux valeurs extremes",
+                 "  Avantage : le plus robuste des tests d'homogeneite des variances",
+                 CL(k>=3, sprintf("k=%d >= 3 groupes",k)),
+                 CL(all(ni>=2), "Chaque groupe a au moins 2 observations"),
+                 CL(TRUE, "Independance des groupes supposee"),
+                 S(4,"VALEUR OBSERVEE DU TEST"),
+                 sprintf("  Zij = |xij - med_i|  (med_i = mediane du groupe i)"),
+                 sprintf("  SSB = %s   SSW = %s",V(SSB),V(SSW)),
+                 sprintf("  W = [(N-k)/(k-1)] * SSB / SSW"),
+                 STAT("W_obs (Brown-Forsythe)", W_bf),
+                 S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
+                 sprintf("  ZNR = [ 0 ; %s ]   (F(%d,%d), alpha=%.2f)",V(Fc),d1,d2,alpha),
+                 sprintf("  F_crit = %s",V(Fc)),
+                 STAT("W_obs",W_bf),
+                 S(6,"DECISION ET CONCLUSION"), DEC_Z(ap),
+                 INTERP(if(!ap)"Variances significativement differentes (heteroscedasticite). Utiliser un test adapte (Welch-ANOVA ou Kruskal-Wallis)." else "Homoscedasticite non rejetee. Les variances peuvent etre supposees egales."),
+                 "", FOOT(nom), sep="\n"
+               )
+             },
+
+             # 11c ─ Test de Bartlett
+             bartlett = {
+               k    <- max(3L,min(8L,as.integer(input$bt_k%||%3)))
+               alpha<-input$bt_alpha
+               grps <- lapply(seq_len(k), function(i){
+                 v<-pv(input[[paste0("bt_g",i)]])
+                 if(length(v)<2) stop(sprintf("Groupe %d : au moins 2 valeurs requises.",i)); v
+               })
+               ni<-sapply(grps,length); N<-sum(ni)
+               y<-unlist(grps); gf<-factor(rep(seq_len(k),ni))
+               si2 <- sapply(grps,var)
+               # Variance poolée
+               Sp2 <- sum((ni-1)*si2) / (N-k)
+               # Statistique K² de Bartlett (formule exacte)
+               num_ <- (N-k)*log(Sp2) - sum((ni-1)*log(si2))
+               c_   <- 1 + (1/(3*(k-1))) * (sum(1/(ni-1)) - 1/(N-k))
+               K2   <- num_ / c_
+               ddl  <- k-1
+               Xc   <- qchisq(1-alpha, df=ddl)
+               ap   <- (K2 <= Xc)
+               gl   <- paste(sapply(seq_len(k), function(i)
+                 sprintf("  G%d: n=%d  moy=%s  s²=%s  ln(s²)=%s",
+                         i,ni[i],V(mean(grps[[i]])),V(si2[i]),V(log(si2[i])))), collapse="\n")
+               paste(
+                 S(1,"DONNEES SAISIES"), gl,
+                 sprintf("  k=%d groupes   N=%d obs. total   alpha=%.2f",k,N,alpha),
+                 sprintf("  Variance poolee Sp² = Sum[(ni-1)si²] / (N-k) = %s",V(Sp2)),
+                 S(2,"FORMULATION DES HYPOTHESES"),
+                 HYP("sigma1² = sigma2² = ... = sigmak²  (homoscedasticite)",
+                     "Au moins deux variances sont differentes"),
+                 S(3,"LOI DE PROBABILITE ET CONDITIONS DE VALIDITE"),
+                 sprintf("  Loi : <span class='r-value'>Chi-deux chi2(%d)</span>",ddl),
+                 "  Principe : compare les log-vraisemblances des variances de groupe",
+                 "             vs la variance poolee — optimal sous normalite",
+                 "  Attention : tres sensible a la non-normalite (test anti-conservateur)",
+                 CL(k>=3, sprintf("k=%d >= 3 groupes",k)),
+                 CL(all(ni>=2), "Chaque groupe a au moins 2 observations"),
+                 CL(all(si2>0), "Toutes les variances de groupe sont strictement positives"),
+                 CL(TRUE, "Normalite des populations REQUISE (hypothese forte)"),
+                 S(4,"VALEUR OBSERVEE DU TEST"),
+                 sprintf("  Numerateur = (N-k)ln(Sp²) - Sum[(ni-1)ln(si²)] = %s",V(num_)),
+                 sprintf("  Coefficient de correction c = %s",V(c_)),
+                 sprintf("  K² = Numerateur / c"),
+                 STAT("K²_obs (Bartlett)", K2),
+                 S(5,"POINTS CRITIQUES ET ZONE DE NON-REJET"),
+                 sprintf("  ZNR = [ 0 ; %s ]   (chi2(%d), alpha=%.2f)",V(Xc),ddl,alpha),
+                 sprintf("  chi2_crit = %s",V(Xc)),
+                 STAT("K²_obs",K2),
+                 S(6,"DECISION ET CONCLUSION"), DEC_Z(ap),
+                 INTERP(if(!ap)"Variances significativement differentes. Si la normalite est douteuse, preferer Brown-Forsythe." else "Homoscedasticite non rejetee (sous hypothese de normalite des populations)."),
+                 "", FOOT(nom), sep="\n"
+               )
+             },
+
              # 12 ─ ANOVA 2 facteurs sans replication
              anova2 = {
                nc   <- max(2L,min(6L,as.integer(input$an2_ncols%||%3)))
